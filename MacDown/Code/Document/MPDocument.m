@@ -8,9 +8,10 @@
 
 #import "MPDocument.h"
 #import <WebKit/WebKit.h>
-#import <JJPluralForm/JJPluralForm.h>
+//#import <JJPluralForm/JJPluralForm.h>
+#import "JJPluralForm.h"
 #import <hoedown/html.h>
-#import "hoedown_html_patch.h"
+#import "../Extensions/hoedown_html_patch.h"
 #import "HGMarkdownHighlighter.h"
 #import "MPUtilities.h"
 #import "MPAutosaving.h"
@@ -85,9 +86,9 @@ NS_INLINE NSString *MPRectStringForAutosaveName(NSString *name)
     return rectString;
 }
 
-NS_INLINE NSColor *MPGetWebViewBackgroundColor(WebView *webview)
+NS_INLINE NSColor *MPGetWebViewBackgroundColor(WKWebView *wkwebview)
 {
-    DOMDocument *doc = webview.mainFrameDocument;
+    DOMDocument *doc = wkwebview.mainFrameDocument;
     DOMNodeList *nodes = [doc getElementsByTagName:@"body"];
     if (!nodes.length)
         return nil;
@@ -113,7 +114,7 @@ NS_INLINE NSColor *MPGetWebViewBackgroundColor(WebView *webview)
 @end
 
 
-@implementation WebView (Shortcut)
+@implementation WKWebView (Shortcut)
 
 - (NSScrollView *)enclosingScrollView
 {
@@ -188,7 +189,7 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 @property (weak) IBOutlet NSView *editorContainer;
 @property (unsafe_unretained) IBOutlet MPEditorView *editor;
 @property (weak) IBOutlet NSLayoutConstraint *editorPaddingBottom;
-@property (weak) IBOutlet WebView *preview;
+@property (weak) IBOutlet WKWebView *preview;
 @property (weak) IBOutlet NSPopUpButton *wordCountWidget;
 @property (strong) IBOutlet MPToolbarController *toolbarController;
 @property (copy, nonatomic) NSString *autosaveName;
@@ -212,7 +213,7 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 @property (nonatomic) BOOL needsToUnregister;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
 @property (nonatomic) BOOL renderToWebPending;
-@property (strong) NSArray<NSNumber *> *webViewHeaderLocations;
+@property (strong) NSArray<NSNumber *> *wkwebViewHeaderLocations;
 @property (strong) NSArray<NSNumber *> *editorHeaderLocations;
 @property (nonatomic) BOOL inLiveScroll;
 
@@ -229,8 +230,8 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 {
     __weak MPDocument *weakObj = doc;
     return ^{
-        WebView *webView = weakObj.preview;
-        NSWindow *window = webView.window;
+        WKWebView *wkwebView = weakObj.preview;
+        NSWindow *window = wkwebView.window;
         @synchronized(window) {
             if (window.isFlushWindowDisabled)
                 [window enableFlushWindow];
@@ -243,7 +244,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
         }
         else
         {
-            NSClipView *contentView = webView.enclosingScrollView.contentView;
+            NSClipView *contentView = wkwebView.enclosingScrollView.contentView;
             NSRect bounds = contentView.bounds;
             bounds.origin.y = weakObj.lastPreviewScrollTop;
             contentView.bounds = bounds;
@@ -832,7 +833,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 #pragma mark - WebResourceLoadDelegate
 
-- (NSURLRequest *)webView:(WebView *)sender resource:(id)identifier willSendRequest:(NSURLRequest *)request redirectResponse:(NSURLResponse *)redirectResponse fromDataSource:(WebDataSource *)dataSource
+- (NSURLRequest *)wkwebView:(WKWebView *)sender resource:(id)identifier willSendRequest:(NSURLRequest *)request redirectResponse:(NSURLResponse *)redirectResponse fromDataSource:(WebDataSource *)dataSource
 {
     
     if ([[request.URL lastPathComponent] isEqualToString:@"MathJax.js"])
@@ -849,7 +850,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 #pragma mark - WebFrameLoadDelegate
 
-- (void)webView:(WebView *)sender didCommitLoadForFrame:(WebFrame *)frame
+- (void)wkwebView:(WKWebView *)sender didCommitLoadForFrame:(WebFrame *)frame
 {
     NSWindow *window = sender.window;
     @synchronized(window) {
@@ -858,7 +859,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     }
 
     // If MathJax is off, the on-completion callback will be invoked directly
-    // when loading is done (in -webView:didFinishLoadForFrame:).
+    // when loading is done (in -wkwebView:didFinishLoadForFrame:).
     if (self.preferences.htmlMathJax)
     {
         MPMathJaxListener *listener = [[MPMathJaxListener alloc] init];
@@ -868,10 +869,10 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     }
 }
 
-- (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
+- (void)wkwebView:(WKWebView *)sender didFinishLoadForFrame:(WebFrame *)frame
 {
     // If MathJax is on, the on-completion callback will be invoked by the
-    // JavaScript handler injected in -webView:didCommitLoadForFrame:.
+    // JavaScript handler injected in -wkwebView:didCommitLoadForFrame:.
     if (!self.preferences.htmlMathJax)
     {
         id callback = MPGetPreviewLoadingCompletionHandler(self);
@@ -893,10 +894,10 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     self.renderToWebPending = NO;
 }
 
-- (void)webView:(WebView *)sender didFailLoadWithError:(NSError *)error
+- (void)wkwebView:(WKWebView *)sender didFailLoadWithError:(NSError *)error
        forFrame:(WebFrame *)frame
 {
-    [self webView:sender didFinishLoadForFrame:frame];
+    [self wkwebView:sender didFinishLoadForFrame:frame];
     
     self.alreadyRenderingInWeb = NO;
 
@@ -909,7 +910,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 #pragma mark - WebPolicyDelegate
 
-- (void)webView:(WebView *)webView
+- (void)wkwebView:(WKWebView *)wkwebView
                 decidePolicyForNavigationAction:(NSDictionary *)information
         request:(NSURLRequest *)request frame:(WebFrame *)frame
                 decisionListener:(id<WebPolicyDecisionListener>)listener
@@ -941,11 +942,11 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 #pragma mark - WebEditingDelegate
 
-- (BOOL)webView:(WebView *)webView doCommandBySelector:(SEL)selector
+- (BOOL)WKwebView:(WKWebView *)wkwebView doCommandBySelector:(SEL)selector
 {
     if (selector == @selector(copy:))
     {
-        NSString *html = webView.selectedDOMRange.markupString;
+        NSString *html = wkwebView.selectedDOMRange.markupString;
 
         // Inject the HTML content later so that it doesn't get cleared during
         // the native copy operation.
@@ -960,7 +961,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 #pragma mark - WebUIDelegate
 
-- (NSUInteger)webView:(WebView *)webView
+- (NSUInteger)wkwebView:(WKWebView *)wkwebView
         dragDestinationActionMaskForDraggingInfo:(id<NSDraggingInfo>)info
 {
     return WebDragDestinationActionNone;
@@ -1227,7 +1228,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 - (IBAction)copyHtml:(id)sender
 {
-    // Dis-select things in WebView so that it's more obvious we're NOT
+    // Dis-select things in WKWebView so that it's more obvious we're NOT
     // respecting the selection range.
     [self.preview setSelectedDOMRange:nil affinity:NSSelectionAffinityUpstream];
 

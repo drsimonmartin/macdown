@@ -8,7 +8,7 @@
 
 #import <WebKit/WebKit.h>
 
-@interface WebView (WebViewPrivateHeaders)
+@interface WKWebView (WKWebViewPrivateHeaders)
 
 /*!
  @method setPageSizeMultiplier:
